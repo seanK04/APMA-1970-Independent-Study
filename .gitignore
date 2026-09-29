@@ -1,0 +1,6 @@
+__pycache__/
+# Downloaded book + cached matrix; rebuilt automatically on first run
+data/
+# Generated plots
+*.png
+.DS_Store
