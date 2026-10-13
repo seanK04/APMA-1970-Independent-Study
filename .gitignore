@@ -4,3 +4,6 @@ data/
 # Generated plots
 *.png
 .DS_Store
+# Third-party tools for sign reading (see sign_reading/eval_bothros_lb.py for setup)
+external/
+.venv-bothros/

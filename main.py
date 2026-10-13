@@ -7,6 +7,10 @@ Examples:
     python main.py --restarts 20                    # how often does a run recover the text?
     python main.py --restarts 10 --compare-powers 0.5,1,2,4 --plot powers.png
     python main.py --message my.txt --length 100    # only use the first 100 characters
+
+    # Crack a ciphertext you already have; --message is the known answer, used for grading.
+    python main.py --ciphertext messages/examples/1.cipher.txt --message messages/examples/1.txt
+    python run_examples.py                          # crack every example in messages/examples/
 """
 
 import argparse
@@ -15,16 +19,20 @@ from pathlib import Path
 import numpy as np
 
 from alphabet import decode, encode, normalize
-from cipher import accuracy, apply_key, invert_key, random_key
+from cipher import accuracy, apply_key, random_key
 from corpus import load_transition_matrix
-from sampler import log_plausibility, metropolis
+from sampler import metropolis, text_log_pl
 
 DEFAULT_MESSAGE = Path(__file__).parent / "messages" / "hamlet.txt"
 
 
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--message", type=Path, default=DEFAULT_MESSAGE, help="text file to encrypt and crack")
+    p.add_argument("--message", type=Path, default=None,
+                   help="plaintext file to encrypt and crack (default: Hamlet); "
+                        "with --ciphertext, the known answer used for grading")
+    p.add_argument("--ciphertext", type=Path, default=None,
+                   help="crack this already-encrypted text file instead of encrypting --message")
     p.add_argument("--length", type=int, default=None, help="use only the first N characters of the message")
     p.add_argument("--iters", type=int, default=10_000, help="Metropolis iterations per run")
     p.add_argument("--seed", type=int, default=0, help="random seed (cipher and sampler)")
@@ -37,7 +45,20 @@ def parse_args():
     p.add_argument("--plot", type=Path, default=None, help="save a log-plausibility trace plot here (.png)")
     p.add_argument("--verbose", action="store_true",
                    help="print progress every --report-every iterations even with multiple runs")
-    return p.parse_args()
+    args = p.parse_args()
+    if args.message is None:
+        if args.ciphertext:
+            p.error("--ciphertext needs --message (the answer) to grade the decryption")
+        args.message = DEFAULT_MESSAGE
+    return args
+
+
+def read_symbols(path, length):
+    """Read a text file, normalize it, optionally truncate it, and encode it."""
+    text = normalize(path.read_text())
+    if length is not None:
+        text = text[:length].strip()
+    return encode(text)
 
 
 def run_experiment(ciphertext, plaintext, log_M, true_log_pl, power, args, show_progress):
@@ -85,20 +106,20 @@ def main():
 
     log_M = np.log(load_transition_matrix())
 
-    text = normalize(args.message.read_text())
-    if args.length is not None:
-        text = text[:args.length].strip()
-    plaintext = encode(text)
-
-    # The cipher depends only on --seed, so every run and power attacks the same ciphertext.
-    encrypt_key = random_key(np.random.default_rng(args.seed))
-    ciphertext = apply_key(encrypt_key, plaintext)
-    true_key = invert_key(encrypt_key)  # the decoding key we hope to find
-    true_log_pl = log_plausibility(true_key, ciphertext, log_M)
+    plaintext = read_symbols(args.message, args.length)
+    if args.ciphertext:
+        ciphertext = read_symbols(args.ciphertext, args.length)
+    else:
+        # The cipher depends only on --seed, so every run and power attacks the same ciphertext.
+        encrypt_key = random_key(np.random.default_rng(args.seed))
+        ciphertext = apply_key(encrypt_key, plaintext)
+    # Plausibility of the true text. When we did the encryption, this is exactly
+    # log Pl(true key); for a supplied ciphertext it's the benchmark to beat.
+    true_log_pl = text_log_pl(plaintext, log_M)
 
     print(f"Plaintext  ({len(plaintext)} chars): {decode(plaintext)}")
-    print(f"Ciphertext: {decode(ciphertext)}")
-    print(f"log Pl(true key) = {true_log_pl:.1f}\n")
+    print(f"Ciphertext ({len(ciphertext)} chars): {decode(ciphertext)}")
+    print(f"log Pl(true text) = {true_log_pl:.1f}\n")
 
     show_progress = args.verbose or (args.restarts == 1 and len(powers) == 1)
     all_results = {p: run_experiment(ciphertext, plaintext, log_M, true_log_pl, p, args, show_progress)
@@ -108,7 +129,7 @@ def main():
     best = max((r for rs in all_results.values() for r in rs), key=lambda r: r.best_log_pl)
     print("\nBest decryption:")
     print(decode(apply_key(best.best_key, ciphertext)))
-    print(f"\nlog Pl(best) = {best.best_log_pl:.1f}   (true key: {true_log_pl:.1f})")
+    print(f"\nlog Pl(best) = {best.best_log_pl:.1f}   (true text: {true_log_pl:.1f})")
     print(f"Accuracy: {best.accuracy:.1%} of characters correct")
 
     if args.restarts > 1 or len(powers) > 1:

@@ -18,10 +18,14 @@ from alphabet import N_SYMBOLS
 from cipher import apply_key, random_key
 
 
+def text_log_pl(symbols: np.ndarray, log_M: np.ndarray) -> float:
+    """Sum of log transition probabilities along a (decoded) text."""
+    return float(log_M[symbols[:-1], symbols[1:]].sum())
+
+
 def log_plausibility(key: np.ndarray, ciphertext: np.ndarray, log_M: np.ndarray) -> float:
-    """log Pl(f): sum of log transition probabilities of the decrypted text."""
-    decoded = apply_key(key, ciphertext)
-    return float(log_M[decoded[:-1], decoded[1:]].sum())
+    """log Pl(f): the log-plausibility of the text that key f decrypts to."""
+    return text_log_pl(apply_key(key, ciphertext), log_M)
 
 
 @dataclass

@@ -9,6 +9,8 @@ A key is a permutation stored as an int array `k` of length 27, read as
 Applying a key to a whole message is just fancy indexing: key[message].
 """
 
+import difflib
+
 import numpy as np
 
 from alphabet import N_SYMBOLS
@@ -32,5 +34,14 @@ def invert_key(key: np.ndarray) -> np.ndarray:
 
 
 def accuracy(decoded: np.ndarray, plaintext: np.ndarray) -> float:
-    """Fraction of message positions decoded to the correct symbol."""
-    return float(np.mean(decoded == plaintext))
+    """Fraction of plaintext characters decoded correctly.
+
+    When the lengths match (e.g. we encrypted the plaintext ourselves) this is a
+    position-by-position comparison. A ciphertext supplied from elsewhere may have
+    typos or dropped/extra spaces, so otherwise the two texts are aligned first
+    and we count characters in matching stretches.
+    """
+    if len(decoded) == len(plaintext):
+        return float(np.mean(decoded == plaintext))
+    matcher = difflib.SequenceMatcher(None, decoded.tolist(), plaintext.tolist(), autojunk=False)
+    return sum(block.size for block in matcher.get_matching_blocks()) / len(plaintext)

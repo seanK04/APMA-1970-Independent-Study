@@ -14,7 +14,7 @@ INK = "#52514e"
 
 def _style(ax, true_log_pl, title):
     ax.axhline(true_log_pl, color=INK, linestyle="--", linewidth=1)
-    ax.annotate("true key", xy=(1, true_log_pl), xycoords=("axes fraction", "data"),
+    ax.annotate("true text", xy=(1, true_log_pl), xycoords=("axes fraction", "data"),
                 xytext=(-4, 4), textcoords="offset points", ha="right", va="bottom",
                 color=INK, fontsize=9)
     ax.set_xlabel("iteration")
